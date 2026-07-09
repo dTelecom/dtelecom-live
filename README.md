@@ -11,7 +11,7 @@ signed access tokens, not just the UI.
 Think Twitch/YouTube Live, but decentralized and self-hostable. Sibling project
 to [dtelecom-meet](https://github.com/dTelecom/dtelecom-meet).
 
-**[Documentation](https://docs.dtelecom.org)** | **[LLM Resources](https://docs.dtelecom.org/llm-resources)**
+**[Live Demo](https://dtelecom-live.vercel.app/)** | **[Documentation](https://docs.dtelecom.org)** | **[LLM Resources](https://docs.dtelecom.org/llm-resources)**
 
 ## Deploy to Vercel
 
