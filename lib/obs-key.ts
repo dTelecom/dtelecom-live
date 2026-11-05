@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 /**
  * Stateless WHIP stream key: `<b64url(room)>.<b64url(HMAC-SHA256(secret, room))>`.
  *
- * The room is embedded in the key and the whole thing is signed with API_SECRET,
+ * The room is embedded in the key and the whole thing is signed with DTELECOM_API_SECRET,
  * so `/api/whip` can verify it and recover the room with zero storage — no DB,
  * no KV, nothing to provision on Vercel. The key is stable per room (reusable
  * across sessions) and can't be forged offline without the secret.
@@ -21,8 +21,8 @@ function b64url(buf: Buffer): string {
 }
 
 function hmac(room: string): Buffer {
-  const secret = process.env.API_SECRET;
-  if (!secret) throw new Error("API_SECRET is not set");
+  const secret = process.env.DTELECOM_API_SECRET;
+  if (!secret) throw new Error("DTELECOM_API_SECRET is not set");
   return crypto.createHmac("sha256", secret).update(room).digest();
 }
 

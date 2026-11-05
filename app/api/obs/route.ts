@@ -10,7 +10,7 @@ import { signStreamKey, appOrigin } from "@/lib/obs-key";
  * and obtain a working key to publish into that room as `obs-<room>` — i.e. they
  * could hijack or spoof the stream. The HMAC only stops *offline* forgery; it
  * does nothing once the key is handed out freely here. The key also can't be
- * revoked per-room without rotating `API_SECRET` (which invalidates every room).
+ * revoked per-room without rotating `DTELECOM_API_SECRET` (which invalidates every room).
  *
  * To harden for production:
  *   1. Authenticate this request and confirm the caller owns the room (e.g.

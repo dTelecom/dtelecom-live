@@ -15,17 +15,18 @@ to [dtelecom-meet](https://github.com/dTelecom/dtelecom-meet).
 
 ## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FdTelecom%2Fdtelecom-live&env=API_KEY,API_SECRET&envDescription=Get%20your%20API%20keys%20from%20cloud.dtelecom.org&envLink=https%3A%2F%2Fcloud.dtelecom.org&project-name=dtelecom-live&repository-name=dtelecom-live)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FdTelecom%2Fdtelecom-live&env=DTELECOM_API_KEY,DTELECOM_API_SECRET,DTELECOM_CLOUD_URL&envDescription=Get%20your%20API%20keys%20from%20cloud.dtelecom.org&envLink=https%3A%2F%2Fcloud.dtelecom.org&project-name=dtelecom-live&repository-name=dtelecom-live)
 
-You only need two environment variables:
+You only need three environment variables:
 
 | Variable | Description |
 |---|---|
-| `API_KEY` | Your dTelecom API key from [cloud.dtelecom.org](https://cloud.dtelecom.org) |
-| `API_SECRET` | Your dTelecom API secret |
+| `DTELECOM_API_KEY` | Your dTelecom API key from [cloud.dtelecom.org](https://cloud.dtelecom.org) |
+| `DTELECOM_API_SECRET` | Your dTelecom API secret |
+| `DTELECOM_CLOUD_URL` | `https://cloud.dtelecom.org` |
 
-Webhook URL, WHIP/OBS ingest, and Solana network settings are configured
-automatically — no database or extra services to provision.
+Webhook URL, WHIP/OBS ingest, and node discovery are handled by the cloud — no
+database or extra services to provision.
 
 ## Features
 
@@ -38,7 +39,7 @@ automatically — no database or extra services to provision.
 - **Live viewer count** — see how many people are watching
 - **In-stream chat** — real-time text messaging via data channels
 - **Host controls** — remove viewers from the stream
-- **Decentralized** — no single point of failure, SFU nodes discovered via Solana
+- **Decentralized** — no single point of failure, the cloud routes each participant to the nearest SFU node
 
 ## Tech Stack
 
@@ -72,8 +73,9 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```env
-API_KEY=<your-api-key>
-API_SECRET=<your-api-secret>
+DTELECOM_API_KEY=<your-api-key>
+DTELECOM_API_SECRET=<your-api-secret>
+DTELECOM_CLOUD_URL=https://cloud.dtelecom.org
 ```
 
 ### 4. Run
@@ -116,7 +118,7 @@ signed value (`<room>.<HMAC>`), so no database is required.
 > since anyone who knows the room name can just ask `/api/obs` for a valid key,
 > **knowing the room name is effectively enough to publish into that room** as
 > the `obs-<room>` participant (i.e. hijack/spoof the stream). The key also can't
-> be revoked per-room without rotating `API_SECRET` (which invalidates every
+> be revoked per-room without rotating `DTELECOM_API_SECRET` (which invalidates every
 > room). This keeps the demo zero-setup and stateless.
 >
 > To harden for production: (1) authenticate `/api/obs` and confirm the caller
@@ -138,7 +140,6 @@ app/
     obs/profile/route.ts          # Downloadable OBS profile (params baked in)
     webhook/route.ts              # Receive events from SFU nodes
     room-count/route.ts           # GET viewer count for a room
-    create-room/route.ts          # Create room (host)
     kick/route.ts                 # Remove viewer (host)
 components/
   StreamRoom.tsx                  # Focused stage + sidebar panels
@@ -150,7 +151,7 @@ lib/
   obs-key.ts                      # Signed WHIP stream key (HMAC, no storage)
   api.ts                          # Client-side fetch helpers
   types.ts                        # Shared types (Role, metadata)
-  room-service.ts                 # Server-side RoomServiceClient
+  cloud.ts                        # Server-side dTelecom Cloud client
   participant-count.ts            # In-memory webhook counter
 ```
 

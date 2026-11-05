@@ -1,4 +1,4 @@
-import { getRoomService } from "@/lib/room-service";
+import { getCloud } from "@/lib/cloud";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -23,8 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const client = await getRoomService();
-    await client.removeParticipant(room, identity);
+    await getCloud().roomService().removeParticipant(room, identity);
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Failed to kick participant";

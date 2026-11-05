@@ -6,10 +6,9 @@ import {
   clearRoom,
 } from "@/lib/participant-count";
 
-const receiver = new WebhookReceiver(
-  process.env.API_KEY!,
-  process.env.API_SECRET!,
-);
+// Verifies the node signature against the node registry. On a test network set
+// SOLANA_REGISTRY_AUTHORITY (and friends) in the environment.
+const receiver = new WebhookReceiver();
 
 // The pre-join count is "people watching", so only viewers count — not the
 // host and not the OBS ingest (`obs-<room>`, metadata role "host").

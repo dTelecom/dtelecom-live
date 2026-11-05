@@ -1,5 +1,5 @@
-import { AccessToken } from "@dtelecom/server-sdk-js";
 import { NextRequest, NextResponse } from "next/server";
+import { getCloud, clientIp } from "@/lib/cloud";
 
 function getWebhookUrl(): string | undefined {
   if (process.env.WEBHOOK_URL) return process.env.WEBHOOK_URL;
@@ -22,31 +22,20 @@ export async function POST(req: NextRequest) {
 
     const isHost = role === "host";
     const metadata = JSON.stringify({ role: isHost ? "host" : "viewer" });
+    const webhookUrl = getWebhookUrl();
 
-    const at = new AccessToken(process.env.API_KEY!, process.env.API_SECRET!, {
-      identity,
-      name: identity,
-      metadata,
-      webHookURL: getWebhookUrl(),
-    });
     // The host publishes media; viewers are watch-only. The SFU enforces
     // canPublish server-side, so a viewer cannot send audio/video even with a
     // tampered client. Both can publish data (chat) and subscribe (watch).
-    at.addGrant({
-      roomJoin: true,
+    const { token, wsUrl } = await getCloud().createToken({
       room,
-      canPublish: isHost,
-      canSubscribe: true,
-      canPublishData: true,
-      roomAdmin: isHost,
+      identity,
+      name: identity,
+      metadata,
+      clientIp: clientIp(req.headers),
+      webhookUrls: webhookUrl ? [webhookUrl] : undefined,
+      grants: { canPublish: isHost, roomAdmin: isHost },
     });
-
-    const token = at.toJwt();
-
-    const clientIp = (req.headers.get("x-forwarded-for") ?? "127.0.0.1")
-      .split(",")[0]
-      .trim();
-    const wsUrl = await at.getWsUrl(clientIp);
 
     return NextResponse.json({ token, wsUrl });
   } catch (e: unknown) {
