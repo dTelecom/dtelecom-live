@@ -9,11 +9,9 @@ import type { NextRequest } from "next/server";
  * no KV, nothing to provision on Vercel. The key is stable per room (reusable
  * across sessions) and can't be forged offline without the secret.
  *
- * ⚠️ This is example-grade. The HMAC prevents *offline* forgery, but the key is a
- * pure function of the (public) room name and `/api/obs` hands it out without
- * auth — so knowing the room name is enough to get a working key and publish as
- * `obs-<room>`. It also isn't revocable per-room. See the security notice in
- * `app/api/obs/route.ts` and the README for how to harden this for production.
+ * Only the host receives it: `/api/obs` and `/api/obs/profile` require the room's host key
+ * (lib/host-key.ts). The key is stable per room and cannot be revoked per room; rotating
+ * DTELECOM_API_SECRET invalidates every stream key.
  */
 
 function b64url(buf: Buffer): string {

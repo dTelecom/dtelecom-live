@@ -2,20 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { createRoom } from "@/lib/api";
+import { saveHostKey } from "@/lib/host-session";
 
 export default function Home() {
   const router = useRouter();
   const [streamName, setStreamName] = useState("");
   const [identity, setIdentity] = useState("");
 
-  function goLive() {
-    if (!streamName.trim() || !identity.trim()) return;
-    const params = new URLSearchParams({
-      room: streamName.trim(),
-      identity: identity.trim(),
-      role: "host",
-    });
-    router.push(`/prejoin?${params}`);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function goLive() {
+    if (!streamName.trim() || !identity.trim() || loading) return;
+    setError("");
+    setLoading(true);
+    try {
+      // The server picks the room name and returns the host key; this tab keeps the key.
+      const { room, hostKey } = await createRoom(streamName.trim());
+      saveHostKey(room, hostKey);
+      const params = new URLSearchParams({ room, identity: identity.trim() });
+      router.push(`/prejoin?${params}`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create the stream");
+      setLoading(false);
+    }
   }
 
   return (
@@ -46,12 +57,18 @@ export default function Home() {
           />
         </div>
 
+        {error && (
+          <div className="mt-4 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
         <button
           onClick={goLive}
-          disabled={!streamName.trim() || !identity.trim()}
+          disabled={!streamName.trim() || !identity.trim() || loading}
           className="mt-6 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Go Live
+          {loading ? "Creating..." : "Go Live"}
         </button>
 
         <p className="mt-4 text-center text-xs text-neutral-500">

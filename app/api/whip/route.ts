@@ -20,7 +20,7 @@ export function OPTIONS() {
  * reading the body, so OBS re-sends its SDP (and Bearer) straight to the node —
  * the node uses the Bearer value as its session key, exactly like Frogy.
  */
-async function handle(req: NextRequest) {
+async function handle(req: NextRequest, ttl: string) {
   const auth = req.headers.get("authorization") ?? "";
   const streamKey = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!streamKey) {
@@ -45,7 +45,7 @@ async function handle(req: NextRequest) {
     name: "OBS",
     // role: host so the OBS ingest isn't counted as a viewer.
     metadata: JSON.stringify({ role: "host" }),
-    ttl: "12h",
+    ttl,
     clientIp: clientIp(req.headers),
     grants: { canSubscribe: false },
   });
@@ -57,7 +57,8 @@ async function handle(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    return await handle(req);
+    // A stream may run for hours; the token's lifetime is a hard limit.
+    return await handle(req, "12h");
   } catch (e: unknown) {
     console.error("[whip] ERROR:", e);
     return NextResponse.json(
@@ -69,7 +70,9 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    return await handle(req);
+    // Stopping only needs to reach the node. Every token holds a participant slot until it is
+    // used or expires, so a stop gets a one-minute token instead of another 12-hour one.
+    return await handle(req, "1m");
   } catch (e: unknown) {
     console.error("[whip] DELETE ERROR:", e);
     return NextResponse.json(

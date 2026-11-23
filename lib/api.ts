@@ -1,62 +1,64 @@
 import type { JoinResponse } from "./types";
 
-export async function joinRoom(
-  room: string,
-  identity: string,
-  role: string,
-): Promise<JoinResponse> {
-  const res = await fetch("/api/join", {
+async function post<T>(url: string, body: unknown, fallbackError: string): Promise<T> {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ room, identity, role }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Failed to join room");
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || fallbackError);
   }
   return res.json();
 }
 
-export async function kickParticipant(
-  room: string,
-  identity: string,
-  callerRole: string,
-): Promise<void> {
-  const res = await fetch("/api/kick", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ room, identity, callerRole }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Failed to kick participant");
-  }
+/** Starts a stream: the server picks the room name and returns its host key. */
+export function createRoom(title: string): Promise<{ room: string; hostKey: string }> {
+  return post("/api/create-room", { title }, "Failed to create the stream");
 }
 
-export async function getRoomCount(room: string): Promise<number> {
+/** Joins as host when `hostKey` is valid for the room, otherwise as a viewer. */
+export function joinRoom(room: string, identity: string, hostKey?: string | null): Promise<JoinResponse> {
+  return post("/api/join", { room, identity, hostKey: hostKey ?? undefined }, "Failed to join room");
+}
+
+export async function kickParticipant(room: string, identity: string, hostKey: string): Promise<void> {
+  await post("/api/kick", { room, identity, hostKey }, "Failed to remove participant");
+}
+
+/** Viewers watching right now, or null when the count is unavailable. */
+export async function getRoomCount(room: string): Promise<number | null> {
   const res = await fetch(`/api/room-count?room=${encodeURIComponent(room)}`);
-  if (!res.ok) return 0;
+  if (!res.ok) return null;
   const data = await res.json();
-  return data.count ?? 0;
+  return typeof data.count === "number" ? data.count : null;
 }
 
 export interface ObsSettings {
   whipUrl: string;
   streamKey: string;
-  profileUrl: (os: "win" | "mac") => string;
 }
 
-export async function getObsSettings(room: string): Promise<ObsSettings> {
-  const res = await fetch(`/api/obs?room=${encodeURIComponent(room)}`);
+export function getObsSettings(room: string, hostKey: string): Promise<ObsSettings> {
+  return post("/api/obs", { room, hostKey }, "Failed to load OBS settings");
+}
+
+/** Downloads the ready-made OBS profile (a zip) for the host. */
+export async function downloadObsProfile(room: string, hostKey: string, os: "win" | "mac"): Promise<void> {
+  const res = await fetch("/api/obs/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ room, hostKey, os }),
+  });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Failed to load OBS settings");
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to download the OBS profile");
   }
-  const data = await res.json();
-  return {
-    whipUrl: data.whipUrl,
-    streamKey: data.streamKey,
-    profileUrl: (os) =>
-      `/api/obs/profile?room=${encodeURIComponent(room)}&os=${os}`,
-  };
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `dtelecom-live-obs-${os}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

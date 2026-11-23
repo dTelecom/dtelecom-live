@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { signStreamKey, appOrigin } from "@/lib/obs-key";
+import { verifyHostKey } from "@/lib/host-key";
 
 /**
- * Returns the OBS WHIP credentials the host pastes (or downloads) into OBS.
- *
- * ⚠️ SECURITY — example-grade, not production.
- * This endpoint is UNAUTHENTICATED and the stream key is derived only from the
- * (public, guessable) room name. So anyone who knows the room name can call this
- * and obtain a working key to publish into that room as `obs-<room>` — i.e. they
- * could hijack or spoof the stream. The HMAC only stops *offline* forgery; it
- * does nothing once the key is handed out freely here. The key also can't be
- * revoked per-room without rotating `DTELECOM_API_SECRET` (which invalidates every room).
- *
- * To harden for production:
- *   1. Authenticate this request and confirm the caller owns the room (e.g.
- *      verify their host JWT / session before issuing a key).
- *   2. Bind the key to a per-room random secret you store and can rotate/revoke
- *      (KV/DB), instead of deriving it from the room name.
- *   3. Add an expiry to the key.
+ * Returns the OBS WHIP settings for the host: the server URL and the stream key OBS sends as its
+ * Bearer token. Only the host (a valid host key for the room) gets them, so knowing the room name
+ * is not enough to publish into the stream.
  */
-export function GET(req: NextRequest) {
-  const room = req.nextUrl.searchParams.get("room");
+export async function POST(req: NextRequest) {
+  const { room, hostKey } = await req.json().catch(() => ({}));
   if (!room) {
     return NextResponse.json({ error: "room is required" }, { status: 400 });
+  }
+  if (!verifyHostKey(room, hostKey)) {
+    return NextResponse.json({ error: "Only the host can get the OBS settings" }, { status: 403 });
   }
 
   return NextResponse.json({

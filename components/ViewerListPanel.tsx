@@ -6,6 +6,7 @@ import {
 } from "@dtelecom/components-react";
 import type { ParticipantMeta } from "@/lib/types";
 import { kickParticipant } from "@/lib/api";
+import { getHostKey } from "@/lib/host-session";
 
 interface Props {
   roomName: string;
@@ -35,7 +36,9 @@ export default function ViewerListPanel({ roomName, onClose }: Props) {
   async function handleKick(identity: string) {
     if (!confirm(`Remove ${identity} from the stream?`)) return;
     try {
-      await kickParticipant(roomName, identity, "host");
+      const hostKey = getHostKey(roomName);
+      if (!hostKey) throw new Error("Only the host can remove viewers");
+      await kickParticipant(roomName, identity, hostKey);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to remove viewer");
     }

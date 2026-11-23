@@ -1,7 +1,7 @@
 # dTelecom Live
 
-Open-source **livestreaming** app built on [dTelecom](https://dtelecom.org) — a
-decentralized WebRTC platform with Solana-based node discovery.
+Open-source **livestreaming** app built on [dTelecom Cloud](https://cloud.dtelecom.org)
+with [`@dtelecom/server-sdk-js`](https://www.npmjs.com/package/@dtelecom/server-sdk-js) 4.x.
 
 One **host** broadcasts camera, mic, screen share, or an **OBS** feed (via WHIP)
 and invites viewers. **Viewers** can only watch, listen, and chat — they cannot
@@ -25,8 +25,8 @@ You only need three environment variables:
 | `DTELECOM_API_SECRET` | Your dTelecom API secret |
 | `DTELECOM_CLOUD_URL` | `https://cloud.dtelecom.org` |
 
-Webhook URL, WHIP/OBS ingest, and node discovery are handled by the cloud — no
-database or extra services to provision.
+Node selection is handled by the cloud, and the host link and OBS stream key are signed
+values, so there is no database or extra service to provision.
 
 ## Features
 
@@ -36,8 +36,9 @@ database or extra services to provision.
 - **Watch-only viewers** — viewers subscribe and chat, but the SFU blocks them
   from publishing any media (`canPublish: false`)
 - **Name-only join** — viewers enter via an invite link, no device setup
-- **Live viewer count** — see how many people are watching
+- **Live viewer count** — read from the room's participants on the nodes
 - **In-stream chat** — real-time text messaging via data channels
+- **Host link** — the server decides who is host; see [Host link](#host-link)
 - **Host controls** — remove viewers from the stream
 - **Decentralized** — no single point of failure, the cloud routes each participant to the nearest SFU node
 
@@ -86,19 +87,44 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### Webhooks locally
+### Webhooks (optional)
 
-Webhooks enable live viewer counts. On Vercel this works automatically. For local
-development, dTelecom SFU nodes can't reach `localhost`, so use
-[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)
-to create a tunnel:
+`app/api/webhook/route.ts` is an example receiver: it verifies each node event and logs it.
+Nothing depends on it; the viewer count asks the nodes directly. On Vercel the URL is set
+automatically. Locally, nodes can't reach `localhost`, so if you want to see events use
+[cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/):
 
 ```bash
 brew install cloudflared
 npm run tunnel
 ```
 
-Set the printed URL as `WEBHOOK_URL` in `.env.local` and restart the dev server.
+Set the printed URL as `WEBHOOK_URL` in `.env.local` and restart the dev server. A webhook URL
+must be public `https`.
+
+## Host link
+
+The browser never says "I am the host"; the server decides, without a database:
+
+1. **Go Live** calls `/api/create-room`. The server picks an unguessable room name (a prefix from
+   your title plus 12 random characters) and returns a **host key**:
+   `HMAC-SHA256(secret, "host:" + room + ":" + expiry)` with a 24-hour expiry, where the secret
+   is derived from `DTELECOM_API_SECRET` (`lib/host-key.ts`).
+2. The tab keeps the key in `sessionStorage`. `/api/join` checks it (constant-time) and only then
+   issues a token that can publish and administer the room; everyone else gets a watch-only token.
+3. Removing a viewer, the OBS settings and the OBS profile need the same key.
+4. **Host link** (in the OBS panel) is `/prejoin?room=<room>#host=<key>`: open it on another
+   device to host from there. The key is after `#`, which browsers never send to a server; the
+   page moves it into `sessionStorage` and clears it from the address bar. **Invite** copies the
+   viewer link, without a key.
+
+Server-generated room names matter: rooms exist from the first join, so if the browser could pick
+the name, anyone could get a host key for a room someone else is using.
+
+Limits: anyone with the host link is a host until it expires; a single link can't be revoked
+(rotating `DTELECOM_API_SECRET` invalidates all of them). Token lifetimes are hard limits: the
+host's token lasts 12 hours, a viewer's 6, OBS 12; extend them with `extendToken` for longer
+streams.
 
 ## Streaming from OBS
 
@@ -112,47 +138,40 @@ Under the hood, OBS publishes to `/api/whip`, which verifies the stream key and
 pattern used in production livestreaming apps on dTelecom. The stream key is a
 signed value (`<room>.<HMAC>`), so no database is required.
 
-> ⚠️ **Security note — the stream key is example-grade, not production-ready.**
-> The key is derived only from the (public, guessable) room name, and `/api/obs`
-> issues it without authentication. The HMAC prevents *offline* forgery, but
-> since anyone who knows the room name can just ask `/api/obs` for a valid key,
-> **knowing the room name is effectively enough to publish into that room** as
-> the `obs-<room>` participant (i.e. hijack/spoof the stream). The key also can't
-> be revoked per-room without rotating `DTELECOM_API_SECRET` (which invalidates every
-> room). This keeps the demo zero-setup and stateless.
->
-> To harden for production: (1) authenticate `/api/obs` and confirm the caller
-> owns the room before issuing a key; (2) bind the key to a per-room random
-> secret you store and can rotate/revoke (KV/DB) instead of deriving it from the
-> room name; (3) add an expiry. See `app/api/obs/route.ts` for details.
+Only the host gets the stream key: `/api/obs` and `/api/obs/profile` require the room's host key.
+The stream key itself has no expiry and can't be revoked per room; rotating `DTELECOM_API_SECRET`
+invalidates every stream key. For production, bind keys to a stored per-room secret you can
+revoke.
 
 ## Project Structure
 
 ```
 app/
   page.tsx                        # Home — start a stream (host)
-  prejoin/page.tsx                # Host camera/mic preview
+  prejoin/page.tsx                # Host camera/mic preview, viewer name entry
   room/[roomName]/page.tsx        # The livestream stage
   api/
-    join/route.ts                 # Create token (host = publish, viewer = watch)
-    whip/route.ts                 # OBS WHIP ingest -> redirect to SFU node
-    obs/route.ts                  # Server URL + stream key for the host
-    obs/profile/route.ts          # Downloadable OBS profile (params baked in)
-    webhook/route.ts              # Receive events from SFU nodes
-    room-count/route.ts           # GET viewer count for a room
-    kick/route.ts                 # Remove viewer (host)
+    create-room/route.ts          # New room name + host key
+    join/route.ts                 # Token: host (valid host key) or watch-only viewer
+    kick/route.ts                 # Remove a viewer (host key required)
+    whip/route.ts                 # OBS WHIP ingest -> redirect to the node
+    obs/route.ts                  # Server URL + stream key (host key required)
+    obs/profile/route.ts          # Downloadable OBS profile (host key required)
+    room-count/route.ts           # Viewers, from the room's participants
+    webhook/route.ts              # Example receiver for node events (logs them)
 components/
   StreamRoom.tsx                  # Focused stage + sidebar panels
   CustomControlBar.tsx            # Host controls / viewer controls
-  ObsPanel.tsx                    # OBS setup (download profile + credentials)
+  ObsPanel.tsx                    # OBS setup and the host link
   ViewerListPanel.tsx             # Viewer list with host actions
   ChatPanel.tsx                   # In-stream chat
 lib/
+  host-key.ts                     # Room names and signed host keys (server)
+  host-session.ts                 # Host key in this tab, host and invite links (browser)
   obs-key.ts                      # Signed WHIP stream key (HMAC, no storage)
   api.ts                          # Client-side fetch helpers
   types.ts                        # Shared types (Role, metadata)
   cloud.ts                        # Server-side dTelecom Cloud client
-  participant-count.ts            # In-memory webhook counter
 ```
 
 ## License

@@ -5,6 +5,7 @@ import type { LocalUserChoices } from "@dtelecom/components-react";
 import "@dtelecom/components-styles";
 import { useRouter, useSearchParams } from "next/navigation";
 import { joinRoom, getRoomCount } from "@/lib/api";
+import { forgetHostKey, takeHostKeyFromUrl, useHostKey } from "@/lib/host-session";
 import { useState, useEffect, Suspense } from "react";
 
 function ViewerCount({ count }: { count: number | null }) {
@@ -26,7 +27,17 @@ function storeSession(
 }
 
 /** Host: preview camera/mic, then go live. */
-function HostPreJoin({ room, identity }: { room: string; identity: string }) {
+function HostPreJoin({
+  room,
+  identity,
+  hostKey,
+  onRejected,
+}: {
+  room: string;
+  identity: string;
+  hostKey: string;
+  onRejected: () => void;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,7 +52,14 @@ function HostPreJoin({ room, identity }: { room: string; identity: string }) {
         setLoading(false);
         return;
       }
-      const { token, wsUrl } = await joinRoom(room, name, "host");
+      const { token, wsUrl, role } = await joinRoom(room, name, hostKey);
+      if (role !== "host") {
+        // The server did not accept the key: expired (24 h), or not for this room. Without the key
+        // this page shows the viewer form, with a note about the link.
+        onRejected();
+        forgetHostKey(room);
+        return;
+      }
       storeSession(room, {
         token,
         wsUrl,
@@ -86,7 +104,15 @@ function HostPreJoin({ room, identity }: { room: string; identity: string }) {
 }
 
 /** Viewer: name-only, no device preview. */
-function ViewerJoin({ room, identity }: { room: string; identity: string }) {
+function ViewerJoin({
+  room,
+  identity,
+  notice,
+}: {
+  room: string;
+  identity: string;
+  notice?: string;
+}) {
   const router = useRouter();
   const [name, setName] = useState(identity);
   const [error, setError] = useState("");
@@ -110,7 +136,7 @@ function ViewerJoin({ room, identity }: { room: string; identity: string }) {
     setError("");
     setLoading(true);
     try {
-      const { token, wsUrl } = await joinRoom(room, name.trim(), "viewer");
+      const { token, wsUrl } = await joinRoom(room, name.trim());
       storeSession(room, {
         token,
         wsUrl,
@@ -137,9 +163,9 @@ function ViewerJoin({ room, identity }: { room: string; identity: string }) {
           <ViewerCount count={count} />
         </div>
 
-        {error && (
+        {(error || notice) && (
           <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-400">
-            {error}
+            {error || notice}
           </div>
         )}
 
@@ -168,17 +194,31 @@ function PreJoinContent() {
   const searchParams = useSearchParams();
   const room = searchParams.get("room") || "";
   const identity = searchParams.get("identity") || "";
-  const role = searchParams.get("role") || "viewer";
+  const hostKey = useHostKey(room);
+  const [notice, setNotice] = useState("");
 
-  if (!room) {
-    router.push("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!room) {
+      router.push("/");
+      return;
+    }
+    // Move a host link's #host= into this tab's storage and out of the address bar.
+    takeHostKeyFromUrl(room);
+  }, [room, router]);
 
-  return role === "host" ? (
-    <HostPreJoin room={room} identity={identity} />
+  if (!room || hostKey === undefined) return null;
+
+  return hostKey ? (
+    <HostPreJoin
+      room={room}
+      identity={identity}
+      hostKey={hostKey}
+      onRejected={() =>
+        setNotice("This host link is invalid or has expired. You can watch as a viewer.")
+      }
+    />
   ) : (
-    <ViewerJoin room={room} identity={identity} />
+    <ViewerJoin room={room} identity={identity} notice={notice} />
   );
 }
 

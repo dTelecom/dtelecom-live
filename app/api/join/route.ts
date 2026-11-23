@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloud, clientIp } from "@/lib/cloud";
+import { verifyHostKey } from "@/lib/host-key";
 
 function getWebhookUrl(): string | undefined {
   if (process.env.WEBHOOK_URL) return process.env.WEBHOOK_URL;
@@ -11,7 +12,7 @@ function getWebhookUrl(): string | undefined {
 
 export async function POST(req: NextRequest) {
   try {
-    const { room, identity, role = "viewer" } = await req.json();
+    const { room, identity, hostKey } = await req.json();
 
     if (!room || !identity) {
       return NextResponse.json(
@@ -20,24 +21,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isHost = role === "host";
-    const metadata = JSON.stringify({ role: isHost ? "host" : "viewer" });
+    // The server decides the role: only a valid host key for this room makes a host.
+    const isHost = verifyHostKey(room, hostKey);
+    const role = isHost ? "host" : "viewer";
     const webhookUrl = getWebhookUrl();
 
-    // The host publishes media; viewers are watch-only. The SFU enforces
-    // canPublish server-side, so a viewer cannot send audio/video even with a
-    // tampered client. Both can publish data (chat) and subscribe (watch).
+    // The host publishes media; viewers are watch-only. The node enforces canPublish, so a viewer
+    // cannot send audio or video even with a modified client. Both can send data (chat) and watch.
     const { token, wsUrl } = await getCloud().createToken({
       room,
       identity,
       name: identity,
-      metadata,
+      metadata: JSON.stringify({ role }),
+      // A token's lifetime is a hard limit: the participant is removed when it runs out.
+      ttl: isHost ? "12h" : "6h",
       clientIp: clientIp(req.headers),
       webhookUrls: webhookUrl ? [webhookUrl] : undefined,
       grants: { canPublish: isHost, roomAdmin: isHost },
     });
 
-    return NextResponse.json({ token, wsUrl });
+    return NextResponse.json({ token, wsUrl, role });
   } catch (e: unknown) {
     console.error("[join] ERROR:", e);
     return NextResponse.json(

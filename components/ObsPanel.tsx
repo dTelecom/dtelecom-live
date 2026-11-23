@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getObsSettings, type ObsSettings } from "@/lib/api";
+import { getObsSettings, downloadObsProfile, type ObsSettings } from "@/lib/api";
+import { getHostKey, hostLink } from "@/lib/host-session";
 
 interface Props {
   roomName: string;
@@ -37,11 +38,19 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 
 export default function ObsPanel({ roomName, onClose }: Props) {
   const [obs, setObs] = useState<ObsSettings | null>(null);
-  const [error, setError] = useState("");
+  const [failure, setError] = useState("");
+  const [hostKey] = useState(() => getHostKey(roomName));
+  const error = hostKey ? failure : "Only the host can stream from OBS";
 
   useEffect(() => {
-    getObsSettings(roomName).then(setObs).catch((e) => setError(e.message));
-  }, [roomName]);
+    if (!hostKey) return;
+    getObsSettings(roomName, hostKey).then(setObs).catch((e) => setError(e.message));
+  }, [roomName, hostKey]);
+
+  function download(os: "win" | "mac") {
+    if (!hostKey) return;
+    downloadObsProfile(roomName, hostKey, os).catch((e) => setError(e.message));
+  }
 
   return (
     <div className="flex w-80 flex-col border-l border-white/10 bg-[#1e1e1e]">
@@ -73,26 +82,20 @@ export default function ObsPanel({ roomName, onClose }: Props) {
             1 · Import a profile
           </div>
           <div className="flex gap-2">
-            <a
-              href={obs?.profileUrl("win") ?? "#"}
-              download
-              aria-disabled={!obs}
-              className={`flex-1 rounded-md bg-blue-600 px-3 py-2 text-center text-xs font-medium text-white hover:bg-blue-500 ${
-                obs ? "" : "pointer-events-none opacity-40"
-              }`}
+            <button
+              onClick={() => download("win")}
+              disabled={!obs}
+              className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-center text-xs font-medium text-white hover:bg-blue-500 disabled:pointer-events-none disabled:opacity-40"
             >
               Windows profile
-            </a>
-            <a
-              href={obs?.profileUrl("mac") ?? "#"}
-              download
-              aria-disabled={!obs}
-              className={`flex-1 rounded-md bg-blue-600 px-3 py-2 text-center text-xs font-medium text-white hover:bg-blue-500 ${
-                obs ? "" : "pointer-events-none opacity-40"
-              }`}
+            </button>
+            <button
+              onClick={() => download("mac")}
+              disabled={!obs}
+              className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-center text-xs font-medium text-white hover:bg-blue-500 disabled:pointer-events-none disabled:opacity-40"
             >
               macOS profile
-            </a>
+            </button>
           </div>
           <p className="text-xs text-neutral-500">
             Unzip, then in OBS: <span className="text-neutral-300">Profile →
@@ -112,6 +115,20 @@ export default function ObsPanel({ roomName, onClose }: Props) {
           <CopyRow label="Server" value={obs?.whipUrl ?? ""} />
           <CopyRow label="Bearer Token (Stream Key)" value={obs?.streamKey ?? ""} />
         </div>
+
+        {/* Host link */}
+        {hostKey && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Host link
+            </div>
+            <p className="text-xs text-neutral-500">
+              Opens this stream as host on another device, for 24 hours. Anyone with
+              it is a host: share the Invite link with viewers instead.
+            </p>
+            <CopyRow label="Host link" value={hostLink(roomName, hostKey)} />
+          </div>
+        )}
 
         {/* Go live */}
         <div className="space-y-2">

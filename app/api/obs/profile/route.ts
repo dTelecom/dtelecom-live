@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
 import { signStreamKey, appOrigin } from "@/lib/obs-key";
+import { verifyHostKey } from "@/lib/host-key";
 
 /**
  * Generates an OBS profile (basic.ini + service.json + encoders) as a zip, with
  * the WHIP server URL and stream key already filled in. The host imports it
  * (OBS → Profile → Import) and clicks Start Streaming — no manual key entry.
+ * Host only: the request carries the room's host key.
  */
-export async function GET(req: NextRequest) {
-  const room = req.nextUrl.searchParams.get("room");
-  const os = req.nextUrl.searchParams.get("os") === "mac" ? "mac" : "win";
+export async function POST(req: NextRequest) {
+  const { room, hostKey, os: osParam } = await req.json().catch(() => ({}));
+  const os = osParam === "mac" ? "mac" : "win";
   if (!room) {
     return NextResponse.json({ error: "room is required" }, { status: 400 });
+  }
+  if (!verifyHostKey(room, hostKey)) {
+    return NextResponse.json({ error: "Only the host can download the OBS profile" }, { status: 403 });
   }
 
   const server = `${appOrigin(req)}/api/whip`;
