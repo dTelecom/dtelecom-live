@@ -11,7 +11,11 @@ signed access tokens, not just the UI.
 Think Twitch/YouTube Live, but decentralized and self-hostable. Sibling project
 to [dtelecom-meet](https://github.com/dTelecom/dtelecom-meet).
 
-**[Live Demo](https://dtelecom-live.vercel.app/)** | **[Documentation](https://docs.dtelecom.org)** | **[LLM Resources](https://docs.dtelecom.org/llm-resources)**
+**[Live Demo](https://dtelecom-live.vercel.app/)** | **[Documentation](https://docs.dtelecom.org)** | **[LLM Resources](https://docs.dtelecom.org/reference/llm-resources/)**
+
+## Join on iOS or Android
+
+In the web app, open **Invite**. Scan its QR code with the [React Native example app](https://github.com/dTelecom/client-sdk-react-native/tree/dtelecom-m150/example) or paste the copied invite link, enter your name and tap **Join room**. The viewer invite lets you watch the host’s camera or shared desktop, hear the stream and use chat. [React Native SDK](https://www.npmjs.com/package/@dtelecom/react-native)
 
 ## Deploy to Vercel
 
