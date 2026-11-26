@@ -115,8 +115,9 @@ The browser never says "I am the host"; the server decides, without a database:
 3. Removing a viewer, the OBS settings and the OBS profile need the same key.
 4. **Host link** (in the OBS panel) is `/prejoin?room=<room>#host=<key>`: open it on another
    device to host from there. The key is after `#`, which browsers never send to a server; the
-   page moves it into `sessionStorage` and clears it from the address bar. **Invite** copies the
-   viewer link, without a key.
+   page moves it into `sessionStorage` and clears it from the address bar. **Invite** shows the
+   viewer QR code and **Copy link**. In the host’s OBS panel, **Show host QR** displays the signed
+   host link as a QR code. Share that code only with the intended host.
 
 Server-generated room names matter: rooms exist from the first join, so if the browser could pick
 the name, anyone could get a host key for a room someone else is using.

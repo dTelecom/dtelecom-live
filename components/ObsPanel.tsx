@@ -1,5 +1,7 @@
 "use client";
 
+import ShareInviteButton from "./ShareInviteButton";
+
 import { useEffect, useState } from "react";
 import { getObsSettings, downloadObsProfile, type ObsSettings } from "@/lib/api";
 import { getHostKey, hostLink } from "@/lib/host-session";
@@ -127,6 +129,7 @@ export default function ObsPanel({ roomName, onClose }: Props) {
               it is a host: share the Invite link with viewers instead.
             </p>
             <CopyRow label="Host link" value={hostLink(roomName, hostKey)} />
+            <ShareInviteButton roomName={roomName} hostKey={hostKey} />
           </div>
         )}
 
