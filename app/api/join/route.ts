@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     // The host publishes media; viewers are watch-only. The node enforces canPublish, so a viewer
     // cannot send audio or video even with a modified client. Both can send data (chat) and watch.
-    const { token, wsUrl } = await getCloud().createToken({
+    const { token, wsUrl, fallbackUrls } = await getCloud().createToken({
       room,
       identity,
       name: identity,
@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
       grants: { canPublish: isHost, roomAdmin: isHost },
     });
 
-    return NextResponse.json({ token, wsUrl, role });
+    // Older issuers return a single URL. The room client already tries it first.
+    const alternatives = fallbackUrls && [...new Set(fallbackUrls)].filter((url) => url !== wsUrl);
+    return NextResponse.json({ token, wsUrl, fallbackUrls: alternatives, role });
   } catch (e: unknown) {
     console.error("[join] ERROR:", e);
     return NextResponse.json(

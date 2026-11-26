@@ -1,6 +1,7 @@
 "use client";
 
 import { PreJoin } from "@dtelecom/components-react";
+import type { JoinResponse } from "@/lib/types";
 import type { LocalUserChoices } from "@dtelecom/components-react";
 import "@dtelecom/components-styles";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -21,7 +22,7 @@ function ViewerCount({ count }: { count: number | null }) {
 
 function storeSession(
   room: string,
-  data: { token: string; wsUrl: string; audioEnabled: boolean; videoEnabled: boolean; role: string },
+  data: JoinResponse & { audioEnabled: boolean; videoEnabled: boolean },
 ) {
   sessionStorage.setItem(`room:${room}`, JSON.stringify(data));
 }
@@ -52,7 +53,7 @@ function HostPreJoin({
         setLoading(false);
         return;
       }
-      const { token, wsUrl, role } = await joinRoom(room, name, hostKey);
+      const { token, wsUrl, fallbackUrls, role } = await joinRoom(room, name, hostKey);
       if (role !== "host") {
         // The server did not accept the key: expired (24 h), or not for this room. Without the key
         // this page shows the viewer form, with a note about the link.
@@ -63,6 +64,7 @@ function HostPreJoin({
       storeSession(room, {
         token,
         wsUrl,
+        fallbackUrls,
         audioEnabled: choices.audioEnabled,
         videoEnabled: choices.videoEnabled,
         role: "host",
@@ -136,10 +138,11 @@ function ViewerJoin({
     setError("");
     setLoading(true);
     try {
-      const { token, wsUrl } = await joinRoom(room, name.trim());
+      const { token, wsUrl, fallbackUrls } = await joinRoom(room, name.trim());
       storeSession(room, {
         token,
         wsUrl,
+        fallbackUrls,
         audioEnabled: false,
         videoEnabled: false,
         role: "viewer",
